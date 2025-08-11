@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useCertificates } from '../contexts/CertificateContext';
 import Navbar from '../components/Navbar';
 import { Award, Upload, Calendar, User, BookOpen, GraduationCap } from 'lucide-react';
+import { getAccounts, requestAccounts, shortenAddress, getChainId, isEthereumAvailable } from '../utils/blockchain';
+
 
 const IssueCertificate: React.FC = () => {
   const { user } = useAuth();
@@ -21,6 +23,31 @@ const IssueCertificate: React.FC = () => {
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [chainId, setChainId] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Try to read existing connection silently
+    (async () => {
+      const [addr] = await getAccounts();
+      if (addr) setWalletAddress(addr);
+      const id = await getChainId();
+      if (id) setChainId(id);
+    })();
+  }, []);
+
+  const handleConnectWallet = async () => {
+    if (!isEthereumAvailable()) {
+      alert('MetaMask not found. Please install MetaMask to continue.');
+      return;
+    }
+    const accounts = await requestAccounts();
+    if (accounts && accounts.length > 0) {
+      setWalletAddress(accounts[0]);
+      const id = await getChainId();
+      setChainId(id);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,13 +63,16 @@ const IssueCertificate: React.FC = () => {
         verificationStatus: 'verified' as const
       };
 
-      const certificateId = await addCertificate(certificateData);
+      await addCertificate(certificateData);
       
-      // Show success message
       alert('Certificate issued successfully!');
       navigate('/institution');
     } catch (err) {
-      setError('Failed to issue certificate. Please try again.');
+      if (err instanceof Error) {
+        setError(`Failed to issue certificate: ${err.message}`);
+      } else {
+        setError('Failed to issue certificate. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -62,8 +92,30 @@ const IssueCertificate: React.FC = () => {
       
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Issue New Certificate</h1>
-          <p className="mt-2 text-gray-600">Create a new blockchain-secured certificate for your student.</p>
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Issue New Certificate</h1>
+              <p className="mt-2 text-gray-600">Create a new blockchain-secured certificate for your student.</p>
+            </div>
+            <div className="flex flex-col items-end gap-2">
+              {walletAddress ? (
+                <div className="text-sm text-gray-700">
+                  Connected: <span className="font-mono">{shortenAddress(walletAddress)}</span>
+                  {chainId && (
+                    <span className="ml-2 text-gray-500">(chain {chainId})</span>
+                  )}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleConnectWallet}
+                  className="px-3 py-1.5 rounded-md bg-gray-900 text-white text-sm hover:bg-gray-800"
+                >
+                  Connect Wallet
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-8">

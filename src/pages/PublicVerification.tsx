@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useCertificates } from '../contexts/CertificateContext';
 import Navbar from '../components/Navbar';
+import { computeContentHash } from '../utils/hash';
+import { readOnChainCert, toCertId } from '../utils/blockchain';
 import QRScanner from '../components/QRScanner';
 import { 
   CheckCircle, 
@@ -37,11 +39,41 @@ const PublicVerification: React.FC = () => {
     setLoading(true);
     setHasSearched(true);
     
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const result = verifyCertificate(id);
-    setVerificationResult(result);
+    // Local lookup
+    const local = verifyCertificate(id);
+    if (!local) {
+      setVerificationResult(null);
+      setLoading(false);
+      return;
+    }
+
+    // Compute expected content hash from canonical payload (matches issuance logic)
+    const normalizedEmail = (local.studentEmail || '').trim().toLowerCase();
+    const payload = {
+      institutionId: local.institutionId,
+      courseName: local.courseName,
+      grade: local.grade,
+      issueDate: local.issueDate,
+      completionDate: local.completionDate,
+      certificateType: local.certificateType,
+      studentEmailHash: computeContentHash({ email: normalizedEmail })
+    };
+    const expectedHash = computeContentHash(payload as Record<string, unknown>);
+
+    // Read on-chain (if env configured). If not configured, fall back to local-only.
+    let chainStatus: { onChain?: any; match?: boolean } = {};
+    try {
+      const certIdHex32 = toCertId(local.id) as `0x${string}`;
+      const onChain = await readOnChainCert(certIdHex32);
+      if (onChain && typeof onChain.issuedAt === 'bigint') {
+        const match = (onChain.contentHash?.toLowerCase?.() || '') === expectedHash.toLowerCase();
+        chainStatus = { onChain, match };
+      }
+    } catch (e) {
+      console.warn('On-chain read skipped/failed', e);
+    }
+
+    setVerificationResult({ ...local, expectedHash, chainStatus });
     setLoading(false);
   };
 

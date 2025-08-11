@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { CertificateProvider } from './contexts/CertificateContext';
 import HomePage from './pages/HomePage';
@@ -20,12 +21,14 @@ function App() {
         <Router>
           <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
             <Routes>
-              <Route path="/" element={<HomePage />} />
+              <Route path="/" element={
+                <ProtectedRoute allowedRoles={['student', 'institution', 'verifier']}>
+                  <HomePage />
+                </ProtectedRoute>
+              } />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
-              <Route path="/verify/:certificateId" element={<PublicVerification />} />
-              <Route path="/verify" element={<PublicVerification />} />
-              
+
               {/* Protected Routes */}
               <Route path="/student/*" element={
                 <ProtectedRoute allowedRoles={['student']}>
@@ -45,12 +48,30 @@ function App() {
                 </ProtectedRoute>
               } />
               
-              <Route path="/certificate/:id" element={<CertificateDetails />} />
+              <Route path="/certificate/:id" element={
+                <ProtectedRoute allowedRoles={['student', 'institution']}>
+                  <CertificateDetails />
+                </ProtectedRoute>
+              } />
+
               <Route path="/issue-certificate" element={
                 <ProtectedRoute allowedRoles={['institution']}>
                   <IssueCertificate />
                 </ProtectedRoute>
               } />
+
+              <Route path="/verify" element={
+                <ProtectedRoute allowedRoles={['institution', 'verifier']}>
+                  <PublicVerification />
+                </ProtectedRoute>
+              } />
+
+              <Route path="/verify/:certificateId" element={
+                <ProtectedRoute allowedRoles={['institution', 'verifier']}>
+                  <PublicVerification />
+                </ProtectedRoute>
+              } />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>
         </Router>
